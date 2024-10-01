@@ -3,39 +3,37 @@ import {Dot, IncomingMessage} from './types';
 
 const App = () => {
   const [dots, setDots] = useState<Dot[]>([]);
-  const [newDots, setNewDots] = useState<Dot>({
-    x: 0,
-    y: 0,
-  });
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [history, setHistory] = useState<Dot[]>([]);
+  const [newDots, setNewDots] = useState<Dot | null>(null);
+
   const ws = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
 
   useEffect(() => {
     ws.current = new WebSocket('ws://localhost:8000/canvas');
-    ws.current.addEventListener('close', () => console.log('ws closed'));
-    ws.current.addEventListener('message', (event) => {
-      const decodedDraw = JSON.parse(event.data) as IncomingMessage;
-      if (decodedDraw.type === 'DRAW_HISTORY') {
-        setDots((prevDots) => [...prevDots, ...decodedDraw.payload]);
-      }
 
-        if (decodedDraw.type === 'DRAW_DOTS') {
-          setDots((prevState) => [...prevState, decodedDraw.payload]);
-        }
-        if (decodedDraw.type === 'WELCOME') {
-          console.log(decodedDraw.payload);
-      }
-    });
+    ws.current.addEventListener('close', () => console.log('ws closed'));
 
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const context = canvas.getContext('2d');
     if (!context) return;
-    context.strokeStyle = 'black';
-    context.lineWidth = 2;
     contextRef.current = context;
+
+    ws.current.addEventListener('message', (event) => {
+      const decodedDraw = JSON.parse(event.data) as IncomingMessage;
+
+      if (decodedDraw.type === 'DRAW_HISTORY') {
+        setHistory((prevPixels) => [...prevPixels, ...decodedDraw.payload]);
+      }
+
+      if (decodedDraw.type === 'DRAW_DOTS') {
+        setDots((prevState) => [...prevState, decodedDraw.payload]);
+      }
+    });
+
     return () => {
       if (ws.current) {
         ws.current.close();
@@ -45,6 +43,7 @@ const App = () => {
 
   const sendDrawing = () => {
     if (!ws.current) return;
+
     ws.current.send(
       JSON.stringify({
         type: 'NEW_DOTS',
@@ -52,40 +51,58 @@ const App = () => {
       }),
     );
   };
-  const startDrawing = ({nativeEvent}: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!contextRef.current || !canvasRef.current) return;
-    const {offsetX, offsetY} = nativeEvent;
-    setIsDrawing(true);
-    contextRef.current.beginPath();
-    contextRef.current.moveTo(offsetX, offsetY);
-  };
+
   const finishDrawing = () => {
-    if (!contextRef.current) return;
-    setIsDrawing(false);
-    contextRef.current.closePath();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-  };
-  const draw = ({nativeEvent}: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !contextRef.current || !canvasRef.current) return;
-    const {offsetX, offsetY} = nativeEvent;
-    contextRef.current.lineTo(offsetX, offsetY);
-    contextRef.current.stroke();
-    setNewDots({x: offsetX, y: offsetY});
     sendDrawing();
   };
 
-  const drawOnStart = useCallback(() => {
-    if (!contextRef.current || !canvasRef.current) return;
+  const draw = ({nativeEvent}: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!contextRef.current) return;
+
     const context = contextRef.current;
-    context.beginPath();
+    if (!context) return;
+
+    const {offsetX, offsetY} = nativeEvent;
+
+    context.fillRect(offsetX, offsetY, 2, 2);
+    setNewDots({x: offsetX, y: offsetY});
+  };
+
+  const drawDots = useCallback(() => {
+    if (!contextRef.current || !canvasRef.current) return;
+
+    const context = contextRef.current;
+
     dots.forEach((dot) => {
-      context?.fillRect(dot.x, dot.y, 1, 1);
+      if (dot) {
+        if (context) {
+          context.fillRect(dot.x, dot.y, 2, 2);
+        }
+      }
     });
   }, [dots]);
+
+  const drawOnStart = useCallback(() => {
+    if (!contextRef.current || !canvasRef.current) return;
+
+    const context = contextRef.current;
+
+    history.forEach((dot) => {
+      if (dot) {
+        if (context) {
+          context.fillRect(dot.x, dot.y, 2, 2);
+        }
+      }
+    });
+  }, [history]);
+
   useEffect(() => {
     void drawOnStart();
   }, [drawOnStart]);
+
+  useEffect(() => {
+    void drawDots();
+  }, [drawDots]);
 
   return (
     <div
@@ -96,13 +113,12 @@ const App = () => {
       }}
     >
       <canvas
-        onMouseDown={startDrawing}
+        onMouseDown={draw}
         onMouseUp={finishDrawing}
-        onMouseMove={draw}
         ref={canvasRef}
         width="1024"
-        height="768"
-        style={{border: '1px solid black'}}
+        height="720"
+        style={{border: '2px solid black'}}
       />
     </div>
   );
