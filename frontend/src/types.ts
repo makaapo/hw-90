@@ -1,9 +1,22 @@
-export interface Dots {
+export interface Dot {
   x: number;
   y: number;
-  color: 'black';
 }
-export interface IncomingDots {
+export interface IncomingHistory {
   type: 'DRAW_DOTS';
-  payload: Dots[];
+  payload: Dot;
 }
+
+export interface IncomingDots {
+  type: 'DRAW_HISTORY';
+  payload: Dot[];
+}
+
+export interface IncomingWelcomeMessage {
+  type: 'WELCOME';
+  payload: string;
+}
+export type IncomingMessage =
+  | IncomingDots
+  | IncomingWelcomeMessage
+  | IncomingHistory;

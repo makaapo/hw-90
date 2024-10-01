@@ -9,7 +9,7 @@ export interface Dot {
   y: number;
 }
 
-export interface IncomingMessage {
+export interface IncomingDots {
   type: string;
   payload: Dot;
 }

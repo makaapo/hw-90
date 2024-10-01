@@ -1,9 +1,12 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {IncomingDots, Dots} from './types';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {Dot, IncomingMessage} from './types';
 
 const App = () => {
-  const [dots, setDots] = useState<Dots[]>([]);
-  const [newDots, setNewDots] = useState<Dots | null>(null);
+  const [dots, setDots] = useState<Dot[]>([]);
+  const [newDots, setNewDots] = useState<Dot>({
+    x: 0,
+    y: 0,
+  });
   const [isDrawing, setIsDrawing] = useState(false);
   const ws = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -13,9 +16,16 @@ const App = () => {
     ws.current = new WebSocket('ws://localhost:8000/canvas');
     ws.current.addEventListener('close', () => console.log('ws closed'));
     ws.current.addEventListener('message', (event) => {
-      const decodedMessage = JSON.parse(event.data) as IncomingDots;
-      if (decodedMessage.type === 'DRAW_DOTS') {
-        setDots(decodedMessage.payload);
+      const decodedDraw = JSON.parse(event.data) as IncomingMessage;
+      if (decodedDraw.type === 'DRAW_HISTORY') {
+        setDots((prevDots) => [...prevDots, ...decodedDraw.payload]);
+      }
+
+        if (decodedDraw.type === 'DRAW_DOTS') {
+          setDots((prevState) => [...prevState, decodedDraw.payload]);
+        }
+        if (decodedDraw.type === 'WELCOME') {
+          console.log(decodedDraw.payload);
       }
     });
 
@@ -26,7 +36,6 @@ const App = () => {
     context.strokeStyle = 'black';
     context.lineWidth = 2;
     contextRef.current = context;
-    void drawOnStart();
     return () => {
       if (ws.current) {
         ws.current.close();
@@ -34,18 +43,7 @@ const App = () => {
     };
   }, []);
 
-  const drawOnStart = () => {
-    if (!contextRef.current || !canvasRef.current) return;
-    const context = contextRef.current;
-    dots.forEach((dot) => {
-      if (context) {
-        context.fillStyle = dot.color;
-        context.fillRect(dot.x, dot.y, 1, 1);
-      }
-    });
-  };
-
-  const sendMessage = () => {
+  const sendDrawing = () => {
     if (!ws.current) return;
     ws.current.send(
       JSON.stringify({
@@ -73,9 +71,21 @@ const App = () => {
     const {offsetX, offsetY} = nativeEvent;
     contextRef.current.lineTo(offsetX, offsetY);
     contextRef.current.stroke();
-    setNewDots({x: offsetX, y: offsetY, color: 'black'});
-    sendMessage();
+    setNewDots({x: offsetX, y: offsetY});
+    sendDrawing();
   };
+
+  const drawOnStart = useCallback(() => {
+    if (!contextRef.current || !canvasRef.current) return;
+    const context = contextRef.current;
+    context.beginPath();
+    dots.forEach((dot) => {
+      context?.fillRect(dot.x, dot.y, 1, 1);
+    });
+  }, [dots]);
+  useEffect(() => {
+    void drawOnStart();
+  }, [drawOnStart]);
 
   return (
     <div
