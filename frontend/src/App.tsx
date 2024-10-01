@@ -13,7 +13,9 @@ const App = () => {
   useEffect(() => {
     ws.current = new WebSocket('ws://localhost:8000/canvas');
 
-    ws.current.addEventListener('close', () => console.log('ws closed'));
+    ws.current.onclose = () => {
+      console.log('ws closed');
+    };
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -22,7 +24,7 @@ const App = () => {
     if (!context) return;
     contextRef.current = context;
 
-    ws.current.addEventListener('message', (event) => {
+    ws.current.onmessage = (event) => {
       const decodedDraw = JSON.parse(event.data) as IncomingMessage;
 
       if (decodedDraw.type === 'DRAW_HISTORY') {
@@ -32,7 +34,7 @@ const App = () => {
       if (decodedDraw.type === 'DRAW_DOTS') {
         setDots((prevState) => [...prevState, decodedDraw.payload]);
       }
-    });
+    };
 
     return () => {
       if (ws.current) {
